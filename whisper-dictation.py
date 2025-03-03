@@ -4,7 +4,7 @@ import threading
 import pyaudio
 import numpy as np
 from pynput import keyboard
-from whisper import load_model
+import mlx_whisper
 import platform
 import math
 
@@ -62,7 +62,7 @@ class SpeechTranscriber:
         self.pykeyboard = keyboard.Controller()
 
     def transcribe(self, audio_data, language=None):
-        result = self.model.transcribe(audio_data, language=language)
+        result = mlx_whisper.transcribe(audio_data, language=language, path_or_hf_repo=self.model)
         is_first = True
         for element in result["text"]:
             if is_first and element == " ":
@@ -214,8 +214,24 @@ def parse_args():
         description='Dictation app using the OpenAI whisper ASR model. By default the keyboard shortcut cmd+option '
                     'starts and stops dictation')
     parser.add_argument('-m', '--model_name', type=str,
-                        choices=['tiny', 'tiny.en', 'base', 'base.en', 'small', 'small.en', 'medium', 'medium.en', 'large'],
-                        default='base',
+                        choices=[
+                            'mlx-community/whisper-base-mlx',
+                            'mlx-community/whisper-base.en-mlx',
+                            'mlx-community/whisper-base.en-mlx-8bit',
+                            'mlx-community/whisper-turbo',
+                            'mlx-community/whisper-small-mlx',
+                            'mlx-community/whisper-small-mlx-8bit',
+                            'mlx-community/whisper-small.en-mlx',
+                            'mlx-community/whisper-small.en-mlx-8bit',
+                            'mlx-community/whisper-medium-mlx',
+                            'mlx-community/whisper-medium.en-mlx',
+                            'mlx-community/whisper-medium-mlx-8bit',
+                            'mlx-community/whisper-large-v3-mlx',
+                            'mlx-community/whisper-large-v3-turbo',
+                            'mlx-community/whisper-large-v3-turbo-q4',
+                            'mlx-community/distil-whisper-large-v3'
+                        ],
+                        default='mlx-community/whisper-base.en-mlx',
                         help='Specify the whisper ASR model to use.')
     parser.add_argument('-k', '--key_combination', type=str, default='cmd_l+alt' if platform.system() == 'Darwin' else 'ctrl+alt',
                         help='Key combination to toggle recording.')
@@ -231,7 +247,7 @@ def parse_args():
 
     if args.language is not None:
         args.language = args.language.split(',')
-    if args.model_name.endswith('.en') and args.language is not None and any(lang != 'en' for lang in args.language):
+    if (args.model_name.endswith('.en') or args.model_name.endswith('.en-mlx')) and args.language is not None and any(lang != 'en' for lang in args.language):
         raise ValueError('If using a .en model, language must be English.')
     return args
 
@@ -242,11 +258,11 @@ if __name__ == "__main__":
     args = parse_args()
 
     print("Loading model...")
-    model = load_model(args.model_name)
+    model = mlx_whisper.load_models.load_model(args.model_name)
     print(f"{args.model_name} model loaded")
     threading.Thread(target=play_tone, args=(500, 0.2, 0.4)).start()
 
-    transcriber = SpeechTranscriber(model)
+    transcriber = SpeechTranscriber(model=args.model_name)
     recorder = Recorder(transcriber)
     language = args.language[0] if args.language else None
     recording_manager = RecordingManager(recorder, language, args.max_time)
